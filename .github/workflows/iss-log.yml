@@ -1,0 +1,21 @@
+name: ISS logger
+on:
+  schedule:
+    - cron: "*/5 * * * *"   
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: iss-log
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python iss_logger_simple.py
+      - run: |
+          git config user.name "iss-log"
+          git config user.email "iss-log@users.noreply.github.com"
+          git add iss_positions.csv
+          git commit -m "ISS sample" || exit 0
+          git pull --rebase
+          git push
