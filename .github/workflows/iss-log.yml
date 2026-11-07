@@ -1,21 +1,38 @@
 name: ISS logger
 on:
+  workflow_dispatch:          
   schedule:
-    - cron: "*/5 * * * *"   
-  workflow_dispatch:
+    - cron: "17 * * * *"      
 permissions:
-  contents: write
-concurrency: iss-log
+  contents: write             
+  actions: write            
+concurrency:
+  group: iss-log
+  cancel-in-progress: false   
+env:
+  STOP_AT: "2026-11-09T08:00:00Z"  
 jobs:
   log:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
-      - run: python iss_logger_simple.py
-      - run: |
-          git config user.name "iss-log"
-          git config user.email "iss-log@users.noreply.github.com"
-          git add iss_positions.csv
-          git commit -m "ISS sample" || exit 0
-          git pull --rebase
-          git push
+      - name: Sample every 5 minutes for about 5h40m
+        run: |
+          git config user.name "iss-bot"
+          git config user.email "iss-bot@users.noreply.github.com"
+          stop=$(date -u -d "$STOP_AT" +%s)
+          for i in $(seq 1 68); do
+            [ "$(date -u +%s)" -ge "$stop" ] && break
+            python iss_logger_simple.py || true
+            git add iss_positions.csv
+            git commit -qm "ISS sample" && git pull -q --rebase && git push -q || true
+            sleep 300
+          done
+      - name: Start the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(date -u +%s)" -lt "$(date -u -d "$STOP_AT" +%s)" ]; then
+            gh workflow run iss-log.yml
+          fi
